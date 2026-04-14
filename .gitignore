@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.class
+.venv/
+env/
+venv/
+ENV/
+*.env
+
+# Data & Assets (Ghost Shards)
+data/
+input_dataset/
+input_images/
+output/
+recovered_files/
+web_uploads/
+*.png
+*.jpg
+*.jpeg
+!FINAL_DEMO_STEGO.png
+
+# Weights (Except primary adversarial weights)
+models/weights/*.pth
+!models/weights/camou_net_adversarial.pth
+
+# Secrets
+secrets/
+*.txt
+!requirements.txt
+
+# Editor
+.vscode/
+.idea/
+*.swp
