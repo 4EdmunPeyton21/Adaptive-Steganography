@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+/* ── Base reset ──────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { overflow-x: hidden; }
+
+/* Lenis takes over scrolling */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-stopped { overflow: hidden; }
+.lenis.lenis-smooth iframe { pointer-events: none; }
+
+/* Hide native scrollbar */
+::-webkit-scrollbar { display: none; }
+* { scrollbar-width: none; -ms-overflow-style: none; }
+
+/* ── Spectral floating particles ────────────────────────────── */
+@keyframes float-particle {
+  0%   { transform: translateY(0)   scale(1);   opacity: 0.6; }
+  50%  { transform: translateY(-40px) scale(1.2); opacity: 0.9; }
+  100% { transform: translateY(-80px) scale(0.8); opacity: 0; }
+}
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  animation: float-particle linear infinite;
+  pointer-events: none;
+}
+
+/* ── Clandestine grid flicker ───────────────────────────────── */
+@keyframes grid-flicker {
+  0%, 94%, 100% { opacity: 0.035; }
+  95%           { opacity: 0.11;  }
+  97%           { opacity: 0.055; }
+}
+.clandestine-grid { animation: grid-flicker 9s ease-in-out infinite; }
+
+/* ── Orb pulse (Spectral) ───────────────────────────────────── */
+@keyframes orb-pulse {
+  0%, 100% { transform: scale(1);    opacity: 0.15; }
+  50%       { transform: scale(1.18); opacity: 0.25; }
+}
+.orb { animation: orb-pulse ease-in-out infinite; }

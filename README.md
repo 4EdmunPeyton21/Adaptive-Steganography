@@ -1,61 +1,58 @@
-# Ghost API - Zero-Knowledge Cloud Drive
+ï»¿# Ghost API - Zero-Knowledge Cloud Drive
 ## Absolute Privacy via Adaptive Steganography & The Horcrux Protocol
 
-### 1. THE CORE ENGINE (BACKEND)
+### Core Engine
 - **Standardization:** Every cover image is normalized to exactly 256x256 pixels.
-- **The Horcrux Protocol:** (In Development) Splits encrypted files into 'N' shards using Shamir’s Secret Sharing.
-- **Steganography:** Neural Embedding using a GAN architecture for high-capacity, visually imperceptible data hiding.
+- **The Horcrux Protocol:** (In Development) Splits encrypted files into N shards using Shamir's Secret Sharing.
+- **Steganography:** Neural embedding using a GAN architecture for high-capacity, visually imperceptible data hiding.
 - **Tech Stack:** Python (FastAPI), PyTorch, Pillow, OpenCV, PyCryptodome.
 
-### 2. THE VISUAL IDENTITY (FRONTEND)
-- **Aesthetic:** High-end technical luxury. Bento grids, obsidian themes (#050505), neon-cyan accents (#00FFFF).
-- **Tech Stack:** Next.js (App Router), Tailwind CSS, Shadcn/ui, GSAP, Framer Motion.
-
 ---
 
-## ??? Installation & Setup
+## Installation & Setup
 
 1. **Clone the repository:**
-   `ash
+   ```bash
    git clone https://github.com/4EdmunPeyton21/Adaptive-Steganography.git
    cd Adaptive-Steganography
-   `
+   ```
 
 2. **Create a virtual environment:**
-   `ash
+   ```bash
    python -m venv .venv
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   `
+   ```
 
 3. **Install dependencies:**
-   `ash
+   ```bash
    pip install -r requirements.txt
-   `
+   ```
 
 4. **Launch the Ghost API:**
-   `ash
+   ```bash
    uvicorn app:app --reload
-   `
+   ```
+
+   The Cuttlefish Vault backend can also be run with:
+   ```bash
+   uvicorn backend.main:app --reload --port 8000
+   ```
 
 ---
 
-## ??? Project Architecture
+## Project Architecture
 
-`	ext
+```text
 +-- app.py                  # Ghost API Gateway (FastAPI)
++-- backend/                # Cuttlefish Vault FastAPI service and schema
 +-- encrypt_image.py        # Core Neural Embedding Logic
 +-- decrypt_image.py        # Neural Extraction Logic
 +-- models/                 # GAN & Camouflage Net Architectures
-¦   +-- weights/            # Pre-trained Stealth Weights
++-- models/weights/         # Pre-trained Stealth Weights
 +-- stego/                  # Adaptive Engine & Crypto Utilities
 +-- configs/                # Training & Inference Hyperparameters
-`
+```
 
 ---
 
-## ?? Future Ecosystem
-- **Ghost API Dashboard:** B2B-style developer interface for key and asset management.
-- **Chrome Extension:** Real-time DOM monitoring to "reveal" hidden data in shard-images.
-
----
 *Built with the Horcrux Protocol for a future without surveillance.*
