@@ -1,0 +1,23 @@
+# Hardware limits and hyperparameters
+# configs/training.yaml
+
+hardware:
+  device: "cuda"
+  use_amp: True          # Auto Mixed Precision: CRITICAL for RTX 3050 to save VRAM
+
+data:
+  train_dir: "data/bossbase"
+  val_dir: "data/div2k"
+  patch_size: 256        # We train the AI on 256x256 squares, not massive 4K images
+  batch_size: 8          # If you crash during training later, drop this to 4
+  num_workers: 4         # How many CPU cores help load the images
+
+hyperparameters:
+  lr_generator: 0.0002   # Learning rate for our Embedder/U-Net
+  lr_discriminator: 0.0001
+  payload_bpp: 0.4       # Target bits per pixel to hide
+
+loss_weights:
+  reconstruction: 1.0    # Importance of decoding the message perfectly
+  adversarial: 0.001     # Importance of fooling the steganalyzer
+  perceptual: 50.0       # Importance of keeping the image looking normal
