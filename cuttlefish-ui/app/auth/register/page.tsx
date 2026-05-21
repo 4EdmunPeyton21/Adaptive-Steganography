@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { LoginForm } from "@/components/ui/login-form";
+import { RegisterForm } from "@/components/ui/register-form";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   return (
     <main className="relative min-h-dvh w-screen overflow-hidden bg-slate-900">
       <Link
@@ -12,7 +12,7 @@ export default function LoginPage() {
       </Link>
 
       <div className="relative z-10 flex min-h-dvh w-full items-center justify-center px-4 py-24 sm:px-6">
-        <LoginForm />
+        <RegisterForm />
       </div>
     </main>
   );

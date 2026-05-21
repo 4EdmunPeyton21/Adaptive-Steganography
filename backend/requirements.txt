@@ -2,3 +2,6 @@ fastapi
 uvicorn[standard]
 asyncpg
 python-multipart
+passlib[bcrypt]
+pyjwt
+pydantic[email]
