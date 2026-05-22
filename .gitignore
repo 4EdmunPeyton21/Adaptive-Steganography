@@ -33,3 +33,15 @@ secrets/
 .vscode/
 .idea/
 *.swp
+
+# Node.js & Next.js
+node_modules/
+.next/
+out/
+build/
+.env*.local
+
+# Archives & Backups
+*.bak
+*.zip
+

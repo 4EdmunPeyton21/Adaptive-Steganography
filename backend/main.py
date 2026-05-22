@@ -178,6 +178,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition", "Content-Length", "Content-Type"],
 )
 
 
@@ -467,7 +468,30 @@ async def get_memory_image(vault_id: str, user_id: int = Depends(get_current_use
         
     return Response(content=row["file_data"], media_type="image/jpeg")
 
-# ── GET /api/v1/summon/{filename} ─────────────────────────────────
+# ── DELETE /api/v1/vault/memories/{vault_id} ───────────────────────
+
+@app.delete("/api/v1/vault/memories/{vault_id}")
+async def delete_memory(vault_id: str, user_id: int = Depends(get_current_user)):
+    pool = await get_pool()
+    if not pool:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    try:
+        val_uuid = uuid.UUID(vault_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    result = await pool.execute(
+        "DELETE FROM cuttlefish_vault WHERE id = $1 AND user_id = $2",
+        val_uuid, user_id
+    )
+
+    # asyncpg returns e.g. "DELETE 1" — if 0 rows affected the photo wasn't found/owned
+    if result == "DELETE 0":
+        raise HTTPException(status_code=404, detail="Memory not found or not owned by user")
+
+    return {"deleted": vault_id}
+
 
 @app.get("/api/v1/summon/{filename}", response_model=SummonResponse)
 async def summon_file(filename: str):
@@ -615,62 +639,86 @@ async def health_check():
 async def stego_upload(file: UploadFile = File(...), user_id: int = Depends(get_current_user)):
     pool = await get_pool()
     raw_bytes = await file.read()
-    
-    # 1. Generate Horcruxes
+
+    # 1. Generate Horcruxes (AES-256 + Shamir k=3, n=5)
     horcrux_data = generate_horcruxes(raw_bytes, k=3, n=5)
     ciphertext = horcrux_data['ciphertext']
     shards = horcrux_data['shards']
-    
-    # 2. Fetch custom covers and blend with defaults
+
+    # 2. Fetch cover images — prioritise user's Memory Vault images,
+    #    fall back to any custom stego covers they have uploaded.
     engine = StegoEngine()
-    cover_dir = os.path.join(os.path.dirname(__file__), "covers")
-    
-    user_covers_rows = await pool.fetch("SELECT image_data FROM stego_custom_covers WHERE user_id = $1", user_id)
-    custom_covers = [r["image_data"] for r in user_covers_rows]
+
+    # Pull all vault images for this user
+    vault_rows = await pool.fetch(
+        "SELECT file_data FROM cuttlefish_vault WHERE user_id = $1 ORDER BY RANDOM() LIMIT 10",
+        user_id
+    )
+    vault_covers = [r["file_data"] for r in vault_rows if r["file_data"]]
+
+    # Also pull any custom stego covers
+    cover_rows = await pool.fetch(
+        "SELECT image_data FROM stego_custom_covers WHERE user_id = $1",
+        user_id
+    )
+    custom_covers = [r["image_data"] for r in cover_rows]
     random.shuffle(custom_covers)
-    
+
+    # Merge: vault first, then custom covers
+    all_covers = vault_covers + custom_covers
+
+    if len(all_covers) < 5:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Not enough cover images — need at least 5, found {len(all_covers)}. "
+                "Upload more images to your Memory Vault first."
+            )
+        )
+
+    # Pick 5 random covers
+    selected_covers = random.sample(all_covers, 5)
+
     file_id = str(uuid.uuid4())
-    
+
     # Insert file record
     await pool.execute(
-        "INSERT INTO stego_files (id, user_id, file_name, ciphertext, total_shards, threshold) VALUES ($1, $2, $3, $4, $5, $6)",
+        "INSERT INTO stego_files (id, user_id, file_name, ciphertext, total_shards, threshold) "
+        "VALUES ($1, $2, $3, $4, $5, $6)",
         uuid.UUID(file_id), user_id, file.filename, ciphertext, 5, 3
     )
-    
+
     image_responses = []
-    
+
     for i in range(5):
-        if i < len(custom_covers):
-            cover_img = engine.normalize_cover(io.BytesIO(custom_covers[i]))
-        else:
-            default_index = ((i - len(custom_covers)) % 5) + 1
-            cover_path = os.path.join(cover_dir, f"{default_index}.jpg")
-            if not os.path.exists(cover_path):
-                raise HTTPException(status_code=500, detail="Missing default cover image")
-            cover_img = engine.normalize_cover(cover_path)
-            
+        cover_bytes = selected_covers[i]
+        cover_img = engine.normalize_cover(io.BytesIO(cover_bytes))
+
         stego_result, metadata = engine.run_embedding(cover_img, shards[i])
-        
-        # Save to bytes
+
         img_byte_arr = io.BytesIO()
-        stego_result.save(img_byte_arr, format='PNG', pnginfo=metadata)
+        if metadata is not None:
+            stego_result.save(img_byte_arr, format='PNG', pnginfo=metadata)
+        else:
+            stego_result.save(img_byte_arr, format='PNG')
         img_bytes = img_byte_arr.getvalue()
-        
+
         shard_id = str(uuid.uuid4())
-        
+
         await pool.execute(
-            "INSERT INTO stego_shards (id, stego_file_id, user_id, shard_index, image_data) VALUES ($1, $2, $3, $4, $5)",
-            uuid.UUID(shard_id), uuid.UUID(file_id), user_id, i+1, img_bytes
+            "INSERT INTO stego_shards (id, stego_file_id, user_id, shard_index, image_data) "
+            "VALUES ($1, $2, $3, $4, $5)",
+            uuid.UUID(shard_id), uuid.UUID(file_id), user_id, i + 1, img_bytes
         )
-        
+
         image_responses.append({
             "id": shard_id,
             "src": f"/api/v1/stego/shards/{shard_id}/image",
             "fileId": file_id,
-            "shardIndex": i+1,
-            "name": f"shard_{i+1}.png"
+            "shardIndex": i + 1,
+            "name": f"shard_{i + 1}.png"
         })
-        
+
     return {
         "fileId": file_id,
         "fileName": file.filename,
@@ -716,6 +764,15 @@ async def get_stego_shard_image(shard_id: str, user_id: int = Depends(get_curren
         raise HTTPException(status_code=404, detail="Shard not found")
     return Response(content=row["image_data"], media_type="image/png")
 
+# ── DELETE /api/v1/stego/shards/{id} ──────────────────────────────
+@app.delete("/api/v1/stego/shards/{shard_id}")
+async def delete_stego_shard(shard_id: str, user_id: int = Depends(get_current_user)):
+    pool = await get_pool()
+    result = await pool.execute("DELETE FROM stego_shards WHERE id = $1 AND user_id = $2", uuid.UUID(shard_id), user_id)
+    if result == "DELETE 0":
+        raise HTTPException(status_code=404, detail="Shard not found")
+    return {"status": "deleted"}
+
 # ── POST /api/v1/stego/recover ────────────────────────────────────
 class RecoverRequest(BaseModel):
     shard_ids: list[str]
@@ -752,7 +809,7 @@ async def recover_stego_file(req: RecoverRequest, user_id: int = Depends(get_cur
     extracted_shards = []
     for img_bytes in shards_data:
         img = Image.open(io.BytesIO(img_bytes))
-        shard_str = img.info.get("ghost_shard")
+        shard_str = decoder.extract_shard(img)
         if shard_str:
             extracted_shards.append(shard_str)
             
@@ -765,19 +822,50 @@ async def recover_stego_file(req: RecoverRequest, user_id: int = Depends(get_cur
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Recovery failed: {str(e)}")
         
+    # Determine MIME type from filename to help browsers open it correctly
+    import mimetypes
+    mime_type, _ = mimetypes.guess_type(file_row["file_name"])
+    if not mime_type:
+        mime_type = "application/octet-stream"
+
+    # Properly encode filename in Content-Disposition for all browsers
+    safe_name = file_row["file_name"].replace('"', '_')
+
     return Response(
         content=raw_data,
-        headers={"Content-Disposition": f'attachment; filename="{file_row["file_name"]}"'}
+        media_type=mime_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_name}"',
+            "Content-Length": str(len(raw_data)),
+            "Access-Control-Expose-Headers": "Content-Disposition"
+        }
     )
 
 # ── DELETE /api/v1/stego/files/{id} ───────────────────────────────
 @app.delete("/api/v1/stego/files/{file_id}")
 async def delete_stego_file(file_id: str, user_id: int = Depends(get_current_user)):
     pool = await get_pool()
-    result = await pool.execute("DELETE FROM stego_files WHERE id = $1 AND user_id = $2", uuid.UUID(file_id), user_id)
-    if result == "DELETE 0":
+    file_uuid = uuid.UUID(file_id)
+
+    # Verify the file belongs to this user before deleting anything
+    row = await pool.fetchrow(
+        "SELECT id FROM stego_files WHERE id = $1 AND user_id = $2",
+        file_uuid, user_id
+    )
+    if not row:
         raise HTTPException(status_code=404, detail="File not found")
-    return {"status": "deleted"}
+
+    # Delete child shards first (foreign key constraint)
+    shards_deleted = await pool.execute(
+        "DELETE FROM stego_shards WHERE stego_file_id = $1", file_uuid
+    )
+
+    # Now delete the parent file record
+    await pool.execute(
+        "DELETE FROM stego_files WHERE id = $1 AND user_id = $2", file_uuid, user_id
+    )
+
+    return {"status": "deleted", "shards_removed": shards_deleted}
 
 # ── POST /api/v1/stego/covers ───────────────────────────────────────
 @app.post("/api/v1/stego/covers")
